@@ -2,26 +2,24 @@ import React, {StrictMode} from 'react';
 import {render, act, waitFor} from '@testing-library/react';
 
 import * as ElementsModule from './Elements';
-import * as CustomCheckoutModule from './CustomCheckout';
+import * as CheckoutModule from './CheckoutProvider';
 import createElementComponent from './createElementComponent';
 import * as mocks from '../../test/mocks';
 import {
   CardElementComponent,
   PaymentElementComponent,
   PaymentRequestButtonElementComponent,
-  CartElementComponent,
   ExpressCheckoutElementComponent,
 } from '../types';
 
 const {Elements} = ElementsModule;
-const {CustomCheckoutProvider} = CustomCheckoutModule;
+const {CheckoutProvider} = CheckoutModule;
 
 describe('createElementComponent', () => {
   let mockStripe: any;
   let mockElements: any;
   let mockElement: any;
-  let mockCartElementContext: any;
-  let mockCustomCheckoutSdk: any;
+  let mockCheckoutSdk: any;
 
   let simulateElementsEvents: Record<string, any[]>;
   let simulateOn: any;
@@ -33,12 +31,12 @@ describe('createElementComponent', () => {
   beforeEach(() => {
     mockStripe = mocks.mockStripe();
     mockElements = mocks.mockElements();
-    mockCustomCheckoutSdk = mocks.mockCustomCheckoutSdk();
+    mockCheckoutSdk = mocks.mockCheckoutSdk();
     mockElement = mocks.mockElement();
     mockStripe.elements.mockReturnValue(mockElements);
     mockElements.create.mockReturnValue(mockElement);
-    mockStripe.initCustomCheckout.mockResolvedValue(mockCustomCheckoutSdk);
-    mockCustomCheckoutSdk.createElement.mockReturnValue(mockElement);
+    mockStripe.initCheckout.mockResolvedValue(mockCheckoutSdk);
+    mockCheckoutSdk.createElement.mockReturnValue(mockElement);
     jest.spyOn(React, 'useLayoutEffect');
 
     simulateElementsEvents = {};
@@ -56,11 +54,6 @@ describe('createElementComponent', () => {
 
     mockElement.on = simulateOn;
     mockElement.off = simulateOff;
-
-    mockCartElementContext = mocks.mockCartElementContext();
-    jest
-      .spyOn(ElementsModule, 'useCartElementContextWithUseCase')
-      .mockReturnValue(mockCartElementContext);
   });
 
   afterEach(() => {
@@ -92,14 +85,14 @@ describe('createElementComponent', () => {
     });
   });
 
-  describe('on the server - only for CustomCheckoutProvider', () => {
+  describe('on the server - only for CheckoutProvider', () => {
     const CardElement = createElementComponent('card', true);
 
     it('does not render anything', () => {
       const {container} = render(
-        <CustomCheckoutProvider stripe={null} options={{clientSecret: ''}}>
+        <CheckoutProvider stripe={null} options={{clientSecret: ''}}>
           <CardElement />
-        </CustomCheckoutProvider>
+        </CheckoutProvider>
       );
 
       expect(container.firstChild).toBe(null);
@@ -108,11 +101,7 @@ describe('createElementComponent', () => {
 
   describe.each([
     ['Elements', Elements, {clientSecret: 'pi_123'}],
-    [
-      'CustomCheckoutProvider',
-      CustomCheckoutProvider,
-      {clientSecret: 'cs_123'},
-    ],
+    ['CheckoutProvider', CheckoutProvider, {clientSecret: 'cs_123'}],
   ])(
     'on the server with Provider - %s',
     (_providerName, Provider, providerOptions) => {
@@ -159,11 +148,6 @@ describe('createElementComponent', () => {
     );
     const PaymentElement: PaymentElementComponent = createElementComponent(
       'payment',
-      false
-    );
-
-    const CartElement: CartElementComponent = createElementComponent(
-      'cart',
       false
     );
 
@@ -329,10 +313,7 @@ describe('createElementComponent', () => {
 
     it('attaches event listeners once the element is created', () => {
       jest
-        .spyOn(
-          CustomCheckoutModule,
-          'useElementsOrCustomCheckoutSdkContextWithUseCase'
-        )
+        .spyOn(CheckoutModule, 'useElementsOrCheckoutSdkContextWithUseCase')
         .mockReturnValueOnce({elements: null, stripe: null})
         .mockReturnValue({elements: mockElements, stripe: mockStripe});
 
@@ -464,111 +445,6 @@ describe('createElementComponent', () => {
       simulateEvent('ready', mockEvent);
       expect(mockHandler2).toHaveBeenCalledWith(mockEvent);
       expect(mockHandler).not.toHaveBeenCalled();
-    });
-
-    it('sets cart in the CartElementContext', () => {
-      expect(mockCartElementContext.cart).toBe(null);
-
-      render(
-        <Elements stripe={mockStripe}>
-          <CartElement />
-        </Elements>
-      );
-
-      expect(mockCartElementContext.cart).toBe(mockElement);
-    });
-
-    it('sets cartState in the CartElementContext', () => {
-      render(
-        <Elements stripe={mockStripe}>
-          <CartElement />
-        </Elements>
-      );
-
-      expect(mockCartElementContext.cartState).toBe(null);
-
-      const readyEvent = {
-        elementType: 'cart',
-        id: 'cart_session_id_ready',
-        lineItems: {
-          count: 0,
-        },
-      };
-
-      simulateEvent('ready', readyEvent);
-      expect(mockCartElementContext.cartState).toBe(readyEvent);
-
-      const changeEvent = {
-        elementType: 'cart',
-        id: 'cart_session_id_change',
-        lineItems: {
-          count: 1,
-        },
-      };
-      simulateEvent('change', changeEvent);
-      expect(mockCartElementContext.cartState).toBe(changeEvent);
-
-      const checkoutEvent = {
-        elementType: 'cart',
-        id: 'cart_session_id_checkout',
-        lineItems: {
-          count: 2,
-        },
-      };
-      simulateEvent('checkout', checkoutEvent);
-      expect(mockCartElementContext.cartState).toBe(checkoutEvent);
-    });
-
-    it('sets cartState in the CartElementContext when passing in callbacks', () => {
-      const onReady = jest.fn();
-      const onChange = jest.fn();
-      const onCheckout = jest.fn();
-
-      render(
-        <Elements stripe={mockStripe}>
-          <CartElement
-            onReady={onReady}
-            onChange={onChange}
-            onCheckout={onCheckout}
-          />
-        </Elements>
-      );
-
-      expect(mockCartElementContext.cartState).toBe(null);
-
-      const readyEvent = {
-        elementType: 'cart',
-        id: 'cart_session_id_ready',
-        lineItems: {
-          count: 0,
-        },
-      };
-
-      simulateEvent('ready', readyEvent);
-      expect(mockCartElementContext.cartState).toBe(readyEvent);
-      expect(onReady).toBeCalledWith(readyEvent);
-
-      const changeEvent = {
-        elementType: 'cart',
-        id: 'cart_session_id_change',
-        lineItems: {
-          count: 1,
-        },
-      };
-      simulateEvent('change', changeEvent);
-      expect(mockCartElementContext.cartState).toBe(changeEvent);
-      expect(onChange).toBeCalledWith(changeEvent);
-
-      const checkoutEvent = {
-        elementType: 'cart',
-        id: 'cart_session_id_checkout',
-        lineItems: {
-          count: 2,
-        },
-      };
-      simulateEvent('checkout', checkoutEvent);
-      expect(mockCartElementContext.cartState).toBe(checkoutEvent);
-      expect(onCheckout).toBeCalledWith(checkoutEvent);
     });
 
     it('propagates the Element`s change event to the current onChange prop', () => {
@@ -723,46 +599,6 @@ describe('createElementComponent', () => {
 
       simulateEvent('networkschange');
       expect(mockHandler2).toHaveBeenCalledWith();
-      expect(mockHandler).not.toHaveBeenCalled();
-    });
-
-    it('propagates the Element`s checkout event to the current onCheckout prop', () => {
-      const mockHandler = jest.fn();
-      const mockHandler2 = jest.fn();
-      const {rerender} = render(
-        <Elements stripe={mockStripe}>
-          <CartElement onCheckout={mockHandler} />
-        </Elements>
-      );
-      rerender(
-        <Elements stripe={mockStripe}>
-          <CartElement onCheckout={mockHandler2} />
-        </Elements>
-      );
-
-      const checkoutEventMock = Symbol('checkout');
-      simulateEvent('checkout', checkoutEventMock);
-      expect(mockHandler2).toHaveBeenCalledWith(checkoutEventMock);
-      expect(mockHandler).not.toHaveBeenCalled();
-    });
-
-    it('propagates the Element`s lineitemclick event to the current onLineItemClick prop', () => {
-      const mockHandler = jest.fn();
-      const mockHandler2 = jest.fn();
-      const {rerender} = render(
-        <Elements stripe={mockStripe}>
-          <CartElement onLineItemClick={mockHandler} />
-        </Elements>
-      );
-      rerender(
-        <Elements stripe={mockStripe}>
-          <CartElement onLineItemClick={mockHandler2} />
-        </Elements>
-      );
-
-      const lineItemClickEventMock = Symbol('lineitemclick');
-      simulateEvent('lineitemclick', lineItemClickEventMock);
-      expect(mockHandler2).toHaveBeenCalledWith(lineItemClickEventMock);
       expect(mockHandler).not.toHaveBeenCalled();
     });
 
@@ -999,7 +835,7 @@ describe('createElementComponent', () => {
       });
     });
 
-    describe('Within a CustomCheckoutProvider', () => {
+    describe('Within a CheckoutProvider', () => {
       let peMounted = false;
       let result: any;
       beforeEach(() => {
@@ -1019,12 +855,12 @@ describe('createElementComponent', () => {
       it('Can remove and add PaymentElement at the same time', async () => {
         act(() => {
           result = render(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement key={'100'} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1033,12 +869,12 @@ describe('createElementComponent', () => {
         const rerender = result.rerender;
         act(() => {
           rerender(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement key={'200'} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
 
@@ -1049,12 +885,12 @@ describe('createElementComponent', () => {
       it('passes id to the wrapping DOM element', async () => {
         act(() => {
           result = render(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement id="foo" />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1067,12 +903,12 @@ describe('createElementComponent', () => {
       it('passes className to the wrapping DOM element', async () => {
         act(() => {
           result = render(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement className="bar" />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1086,16 +922,16 @@ describe('createElementComponent', () => {
         const options: any = {foo: 'foo'};
         act(() => {
           result = render(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement options={options} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
-        expect(mockCustomCheckoutSdk.createElement).toHaveBeenCalledWith(
+        expect(mockCheckoutSdk.createElement).toHaveBeenCalledWith(
           'payment',
           options
         );
@@ -1107,7 +943,7 @@ describe('createElementComponent', () => {
         let elementCreated = false;
         let elementMounted = false;
 
-        mockCustomCheckoutSdk.createElement.mockImplementation(() => {
+        mockCheckoutSdk.createElement.mockImplementation(() => {
           expect(elementCreated).toBe(false);
           elementCreated = true;
 
@@ -1126,18 +962,18 @@ describe('createElementComponent', () => {
         act(() => {
           result = render(
             <StrictMode>
-              <CustomCheckoutProvider
+              <CheckoutProvider
                 stripe={mockStripe}
                 options={{clientSecret: 'cs_123'}}
               >
                 <PaymentElement />
-              </CustomCheckoutProvider>
+              </CheckoutProvider>
             </StrictMode>
           );
         });
         await waitFor(() => expect(elementMounted).toBeTruthy());
 
-        expect(mockCustomCheckoutSdk.createElement).toHaveBeenCalledTimes(2);
+        expect(mockCheckoutSdk.createElement).toHaveBeenCalledTimes(2);
         expect(mockElement.mount).toHaveBeenCalledTimes(2);
         expect(mockElement.destroy).toHaveBeenCalledTimes(1);
       });
@@ -1145,12 +981,12 @@ describe('createElementComponent', () => {
       it('mounts the element', async () => {
         act(() => {
           result = render(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1164,15 +1000,12 @@ describe('createElementComponent', () => {
         expect(simulateOff).not.toBeCalled();
       });
 
-      it('does not create and mount until CustomCheckoutSdk has been instantiated', async () => {
+      it('does not create and mount until CheckoutSdk has been instantiated', async () => {
         act(() => {
           result = render(
-            <CustomCheckoutProvider
-              stripe={null}
-              options={{clientSecret: 'cs_123'}}
-            >
+            <CheckoutProvider stripe={null} options={{clientSecret: 'cs_123'}}>
               <PaymentElement />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
 
@@ -1183,18 +1016,18 @@ describe('createElementComponent', () => {
 
         act(() => {
           rerender(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
 
         expect(mockElement.mount).toHaveBeenCalled();
-        expect(mockCustomCheckoutSdk.createElement).toHaveBeenCalled();
+        expect(mockCheckoutSdk.createElement).toHaveBeenCalled();
       });
 
       it('adds an event handlers to an Element', async () => {
@@ -1202,12 +1035,12 @@ describe('createElementComponent', () => {
 
         act(() => {
           result = render(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement onChange={mockHandler} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1220,35 +1053,32 @@ describe('createElementComponent', () => {
       it('attaches event listeners once the element is created', async () => {
         const mockHandler = jest.fn();
 
-        // This won't create the element, since customCheckoutSdk is undefined on this render
+        // This won't create the element, since checkoutSdk is undefined on this render
         act(() => {
           result = render(
-            <CustomCheckoutProvider
-              stripe={null}
-              options={{clientSecret: 'cs_123'}}
-            >
+            <CheckoutProvider stripe={null} options={{clientSecret: 'cs_123'}}>
               <PaymentElement onChange={mockHandler} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
-        expect(mockCustomCheckoutSdk.createElement).not.toBeCalled();
+        expect(mockCheckoutSdk.createElement).not.toBeCalled();
 
         expect(simulateOn).not.toBeCalled();
 
-        // This creates the element now that customCheckoutSdk is defined
+        // This creates the element now that checkoutSdk is defined
         act(() => {
           result.rerender(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement onChange={mockHandler} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
 
         await waitFor(() => expect(peMounted).toBeTruthy());
-        expect(mockCustomCheckoutSdk.createElement).toBeCalled();
+        expect(mockCheckoutSdk.createElement).toBeCalled();
 
         expect(simulateOn).toBeCalledWith('change', expect.any(Function));
         expect(simulateOff).not.toBeCalled();
@@ -1262,12 +1092,12 @@ describe('createElementComponent', () => {
         const mockHandler = jest.fn();
         act(() => {
           result = render(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement onChange={mockHandler} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1278,12 +1108,12 @@ describe('createElementComponent', () => {
 
         act(() => {
           rerender(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement onChange={mockHandler} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1295,12 +1125,12 @@ describe('createElementComponent', () => {
         const mockHandler = jest.fn();
         act(() => {
           result = render(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement onChange={mockHandler} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1311,12 +1141,12 @@ describe('createElementComponent', () => {
 
         act(() => {
           rerender(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1330,12 +1160,12 @@ describe('createElementComponent', () => {
 
         act(() => {
           result = render(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement onChange={mockHandler} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1345,12 +1175,12 @@ describe('createElementComponent', () => {
 
         act(() => {
           rerender(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement onChange={mockHandler2} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1365,24 +1195,24 @@ describe('createElementComponent', () => {
 
         act(() => {
           result = render(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement onReady={mockHandler} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
         const {rerender} = result;
         act(() => {
           rerender(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement onReady={mockHandler2} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1399,12 +1229,12 @@ describe('createElementComponent', () => {
 
         act(() => {
           result = render(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement onChange={mockHandler} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1412,12 +1242,12 @@ describe('createElementComponent', () => {
 
         act(() => {
           rerender(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement onChange={mockHandler2} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1433,12 +1263,12 @@ describe('createElementComponent', () => {
         const mockHandler2 = jest.fn();
         act(() => {
           result = render(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement onBlur={mockHandler} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1446,12 +1276,12 @@ describe('createElementComponent', () => {
 
         act(() => {
           rerender(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement onBlur={mockHandler2} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1466,12 +1296,12 @@ describe('createElementComponent', () => {
         const mockHandler2 = jest.fn();
         act(() => {
           result = render(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement onFocus={mockHandler} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1479,12 +1309,12 @@ describe('createElementComponent', () => {
 
         act(() => {
           rerender(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement onFocus={mockHandler2} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1499,12 +1329,12 @@ describe('createElementComponent', () => {
         const mockHandler2 = jest.fn();
         act(() => {
           result = render(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement onEscape={mockHandler} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1512,12 +1342,12 @@ describe('createElementComponent', () => {
 
         act(() => {
           rerender(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement onEscape={mockHandler2} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1532,12 +1362,12 @@ describe('createElementComponent', () => {
         const mockHandler2 = jest.fn();
         act(() => {
           result = render(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement onLoadError={mockHandler} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1545,12 +1375,12 @@ describe('createElementComponent', () => {
 
         act(() => {
           rerender(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement onLoadError={mockHandler2} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1565,12 +1395,12 @@ describe('createElementComponent', () => {
         const mockHandler2 = jest.fn();
         act(() => {
           result = render(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement onLoaderStart={mockHandler} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1578,12 +1408,12 @@ describe('createElementComponent', () => {
 
         act(() => {
           rerender(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement onLoaderStart={mockHandler2} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1596,12 +1426,12 @@ describe('createElementComponent', () => {
       it('updates the Element when options change', async () => {
         act(() => {
           result = render(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement options={{layout: 'accordion'}} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1609,12 +1439,12 @@ describe('createElementComponent', () => {
 
         act(() => {
           rerender(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement options={{layout: 'tabs'}} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1627,12 +1457,12 @@ describe('createElementComponent', () => {
       it('does not trigger unnecessary updates', async () => {
         act(() => {
           result = render(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement options={{layout: 'accordion'}} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1640,12 +1470,12 @@ describe('createElementComponent', () => {
 
         act(() => {
           rerender(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement options={{layout: 'accordion'}} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1656,13 +1486,13 @@ describe('createElementComponent', () => {
       it('updates the Element when options change from null to non-null value', async () => {
         act(() => {
           result = render(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               {/* @ts-expect-error */}
               <PaymentElement options={null} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1670,12 +1500,12 @@ describe('createElementComponent', () => {
 
         act(() => {
           rerender(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement options={{layout: 'tabs'}} />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1688,12 +1518,9 @@ describe('createElementComponent', () => {
       it('destroys an existing Element when the component unmounts', async () => {
         act(() => {
           result = render(
-            <CustomCheckoutProvider
-              stripe={null}
-              options={{clientSecret: 'cs_123'}}
-            >
+            <CheckoutProvider stripe={null} options={{clientSecret: 'cs_123'}}>
               <PaymentElement />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         const {unmount} = result;
@@ -1704,12 +1531,12 @@ describe('createElementComponent', () => {
 
         act(() => {
           result = render(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={mockStripe}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1724,12 +1551,12 @@ describe('createElementComponent', () => {
 
         act(() => {
           result = render(
-            <CustomCheckoutProvider
+            <CheckoutProvider
               stripe={stripePromise}
               options={{clientSecret: 'cs_123'}}
             >
               <PaymentElement />
-            </CustomCheckoutProvider>
+            </CheckoutProvider>
           );
         });
         await waitFor(() => expect(peMounted).toBeTruthy());
@@ -1744,12 +1571,12 @@ describe('createElementComponent', () => {
         act(() => {
           result = render(
             <StrictMode>
-              <CustomCheckoutProvider
+              <CheckoutProvider
                 stripe={stripePromise}
                 options={{clientSecret: 'cs_123'}}
               >
                 <PaymentElement />
-              </CustomCheckoutProvider>
+              </CheckoutProvider>
             </StrictMode>
           );
         });

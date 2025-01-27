@@ -16,27 +16,18 @@ import {
   PaymentRequestButtonElementComponent,
   ShippingAddressElementComponent,
   AddressElementComponent,
-  CartElementComponent,
   AffirmMessageElementComponent,
   AfterpayClearpayMessageElementComponent,
   PaymentMethodMessagingElementComponent,
+  CurrencySelectorElementComponent,
 } from './types';
 import {isServer} from './utils/isServer';
 
 export * from './types';
 
-export {
-  useElements,
-  useCartElement,
-  useCartElementState,
-  Elements,
-  ElementsConsumer,
-} from './components/Elements';
+export {useElements, Elements, ElementsConsumer} from './components/Elements';
 
-export {
-  useCustomCheckout,
-  CustomCheckoutProvider,
-} from './components/CustomCheckout';
+export {useCheckout, CheckoutProvider} from './components/CheckoutProvider';
 export {EmbeddedCheckout} from './components/EmbeddedCheckout';
 export {EmbeddedCheckoutProvider} from './components/EmbeddedCheckoutProvider';
 export {useStripe} from './components/useStripe';
@@ -138,6 +129,15 @@ export const ExpressCheckoutElement: ExpressCheckoutElementComponent = createEle
 );
 
 /**
+ * Requires beta access:
+ * Contact [Stripe support](https://support.stripe.com/) for more information.
+ */
+export const CurrencySelectorElement: CurrencySelectorElementComponent = createElementComponent(
+  'currencySelector',
+  isServer
+);
+
+/**
  * @docs https://stripe.com/docs/stripe-js/react#element-components
  */
 export const PaymentRequestButtonElement: PaymentRequestButtonElementComponent = createElementComponent(
@@ -169,17 +169,6 @@ export const AddressElement: AddressElementComponent = createElementComponent(
  */
 export const ShippingAddressElement: ShippingAddressElementComponent = createElementComponent(
   'shippingAddress',
-  isServer
-);
-
-/**
- * Requires beta access:
- * Contact [Stripe support](https://support.stripe.com/) for more information.
- *
- * @docs https://stripe.com/docs/elements/cart-element
- */
-export const CartElement: CartElementComponent = createElementComponent(
-  'cart',
   isServer
 );
 
